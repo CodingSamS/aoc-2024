@@ -10,8 +10,6 @@ use thiserror::Error;
 enum XmasError {
     #[error("Could not parse char to XMAS struct")]
     XmasParseFailed,
-    #[error("Len too short")]
-    LenTooShort,
 }
 
 #[derive(Debug, Clone)]
@@ -26,6 +24,31 @@ enum NextValue {
     IsValid,
     IsXmas,
     IsNotValid,
+}
+
+fn is_mas(
+    center: &XMAS,
+    upper_left: &XMAS,
+    upper_right: &XMAS,
+    lower_left: &XMAS,
+    lower_right: &XMAS,
+) -> bool {
+    match center {
+        XMAS::A => match (upper_left, lower_right) {
+            (XMAS::M, XMAS::S) => match (upper_right, lower_left) {
+                (XMAS::M, XMAS::S) => true,
+                (XMAS::S, XMAS::M) => true,
+                _ => false,
+            },
+            (XMAS::S, XMAS::M) => match (upper_right, lower_left) {
+                (XMAS::M, XMAS::S) => true,
+                (XMAS::S, XMAS::M) => true,
+                _ => false,
+            },
+            _ => false,
+        },
+        _ => false,
+    }
 }
 
 impl XMAS {
@@ -170,17 +193,6 @@ where
         }
     }
 
-    println!("horizontal: {:?}", xmas_vec_horizontal);
-    println!("vertical: {:?}", xmas_vec_vertical);
-    println!(
-        "diagonal left to right: {:?}",
-        xmas_vec_diagonal_left_to_right
-    );
-    println!(
-        "diagonal right to left: {:?}",
-        xmas_vec_diagonal_right_to_left
-    );
-
     let mut counter = 0;
 
     for v in xmas_vec_horizontal {
@@ -209,6 +221,25 @@ where
 {
     let file = File::open(filename)?;
     let buf = io::BufReader::new(file);
+    let mut xmas_vec_horizontal: Vec<Vec<XMAS>> = Vec::new();
+    for line in buf.lines().filter_map(|x| x.ok()) {
+        let xmas_inner_vec: Result<Vec<XMAS>, _> =
+            line.chars().map(|c| XMAS::try_from(c)).collect();
+        xmas_vec_horizontal.push(xmas_inner_vec?);
+    }
+
+    let rows = xmas_vec_horizontal.len();
+    let columns = xmas_vec_horizontal
+        .get(0)
+        .context("not enough columns")?
+        .len();
+
+    let mut counter = 0
+    for i in 1..rows - 1 {
+        for j in 1..columns - 1 {
+            
+        }
+    }
 
     Ok(1)
 }
@@ -224,9 +255,9 @@ mod tests {
     fn test1() {
         assert_eq!(crate::puzzle01("data/test_data_1").unwrap(), 18)
     }
-    /*
+
     #[test]
     fn test2() {
         assert_eq!(crate::puzzle02("data/test_data_1").unwrap(), 4)
-    }*/
+    }
 }
