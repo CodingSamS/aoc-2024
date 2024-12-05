@@ -234,19 +234,27 @@ where
         .context("not enough columns")?
         .len();
 
-    let mut counter = 0
+    let mut counter = 0;
     for i in 1..rows - 1 {
         for j in 1..columns - 1 {
-            
+            if is_mas(
+                &xmas_vec_horizontal[i][j],
+                &xmas_vec_horizontal[i - 1][j - 1],
+                &xmas_vec_horizontal[i - 1][j + 1],
+                &xmas_vec_horizontal[i + 1][j - 1],
+                &xmas_vec_horizontal[i + 1][j + 1],
+            ) {
+                counter += 1;
+            }
         }
     }
 
-    Ok(1)
+    Ok(counter)
 }
 
 fn main() {
     println!("Solution 1: {}", puzzle01("data/data_1").unwrap());
-    //    println!("Solution 2: {}", puzzle02("data/data_1").unwrap());
+    println!("Solution 2: {}", puzzle02("data/data_1").unwrap());
 }
 
 #[cfg(test)]
@@ -258,6 +266,6 @@ mod tests {
 
     #[test]
     fn test2() {
-        assert_eq!(crate::puzzle02("data/test_data_1").unwrap(), 4)
+        assert_eq!(crate::puzzle02("data/test_data_1").unwrap(), 9)
     }
 }
