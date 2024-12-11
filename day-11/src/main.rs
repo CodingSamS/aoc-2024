@@ -4,6 +4,7 @@ use std::{
     path::Path,
     time::SystemTime,
 };
+use tokio::task::JoinSet;
 
 #[derive(Debug)]
 struct Stone {
@@ -108,11 +109,10 @@ where
     Ok(stone_line.len())
 }
 
-fn calc_resulting_stones(stone: Stone, max_number_of_blinks: usize) -> u128 {
+async fn calc_resulting_stones(stone: Stone, max_number_of_blinks: usize) -> u128 {
     let mut number_of_resulting_stones = 0;
 
     let mut stone_vec = vec![stone];
-    let mut time_now = SystemTime::now();
     loop {
         match stone_vec.pop() {
             Some(stone) => {
@@ -121,14 +121,6 @@ fn calc_resulting_stones(stone: Stone, max_number_of_blinks: usize) -> u128 {
                         stone_vec.push(next_stone);
                     } else {
                         number_of_resulting_stones += 1;
-                        let time_delta = time_now.elapsed().unwrap().as_secs();
-                        if 300 < time_delta {
-                            println!(
-                                "Number of stones processed: {}\nDuration: {}",
-                                number_of_resulting_stones, time_delta
-                            );
-                            time_now = SystemTime::now();
-                        }
                     }
                 }
             }
@@ -139,7 +131,7 @@ fn calc_resulting_stones(stone: Stone, max_number_of_blinks: usize) -> u128 {
     number_of_resulting_stones
 }
 
-fn puzzle02<P>(filename: P, number_of_blinks: usize) -> anyhow::Result<u128>
+async fn puzzle02<P>(filename: P, number_of_blinks: usize) -> anyhow::Result<u128>
 where
     P: AsRef<Path>,
 {
@@ -155,22 +147,26 @@ where
     }
 
     let mut number_of_stones = 0;
+    let start_time = SystemTime::now();
+
+    let mut join_set = JoinSet::new();
 
     for stone in stone_line {
-        let start_time = SystemTime::now();
-        number_of_stones += calc_resulting_stones(stone, number_of_blinks);
-        println!(
-            "Duration for stone: {}s",
-            start_time.elapsed().unwrap().as_secs()
-        );
+        join_set.spawn(calc_resulting_stones(stone, number_of_blinks));
     }
 
+    while let Some(Ok(result)) = join_set.join_next().await {
+        number_of_stones += result;
+    }
+
+    println!("Duration: {}s", start_time.elapsed().unwrap().as_secs());
     Ok(number_of_stones)
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     println!("Solution 1: {}", puzzle01("data/data_1", 25).unwrap());
-    println!("Solution 2: {}", puzzle02("data/data_1", 75).unwrap());
+    println!("Solution 2: {}", puzzle02("data/data_1", 75).await.unwrap());
 }
 
 #[cfg(test)]
@@ -180,8 +176,11 @@ mod tests {
         assert_eq!(crate::puzzle01("data/test_data_1", 25).unwrap(), 55312)
     }
 
-    #[test]
-    fn test2() {
-        assert_eq!(crate::puzzle02("data/test_data_1", 25).unwrap(), 55312)
+    #[tokio::test]
+    async fn test2() {
+        assert_eq!(
+            crate::puzzle02("data/test_data_1", 25).await.unwrap(),
+            55312
+        )
     }
 }
