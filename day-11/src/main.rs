@@ -1,10 +1,10 @@
 use std::{
+    collections::HashMap,
     fs::File,
     io::{self, BufRead},
     path::Path,
     time::SystemTime,
 };
-use tokio::task::JoinSet;
 
 #[derive(Debug)]
 struct Stone {
@@ -19,30 +19,6 @@ impl Stone {
 
     fn is_zero(&self) -> bool {
         self.number == 0
-    }
-
-    fn get_next_stones(&self) -> Vec<Stone> {
-        if let Some(stone_vec) = self.try_get_zero_stone() {
-            stone_vec
-        } else if let Some(stone_vec) = self.try_get_stone_halves() {
-            stone_vec
-        } else {
-            vec![Stone {
-                number: self.number * 2024,
-                blinks: self.blinks + 1,
-            }]
-        }
-    }
-
-    fn try_get_zero_stone(&self) -> Option<Vec<Stone>> {
-        if self.number == 0 {
-            Some(vec![Stone {
-                number: 1,
-                blinks: self.blinks + 1,
-            }])
-        } else {
-            None
-        }
     }
 
     fn try_get_stone_halves(&self) -> Option<Vec<Stone>> {
@@ -109,64 +85,55 @@ where
     Ok(stone_line.len())
 }
 
-async fn calc_resulting_stones(stone: Stone, max_number_of_blinks: usize) -> u128 {
-    let mut number_of_resulting_stones = 0;
-
-    let mut stone_vec = vec![stone];
-    loop {
-        match stone_vec.pop() {
-            Some(stone) => {
-                for next_stone in stone.get_next_stones() {
-                    if stone.blinks < max_number_of_blinks {
-                        stone_vec.push(next_stone);
-                    } else {
-                        number_of_resulting_stones += 1;
-                    }
-                }
-            }
-            None => break, // all stones handled
-        }
-    }
-
-    number_of_resulting_stones
-}
-
-async fn puzzle02<P>(filename: P, number_of_blinks: usize) -> anyhow::Result<u128>
+fn puzzle02<P>(filename: P, number_of_blinks: usize) -> anyhow::Result<u64>
 where
     P: AsRef<Path>,
 {
     let file = File::open(filename)?;
     let buf = io::BufReader::new(file);
 
-    let mut stone_line = Vec::new();
+    let mut stone_map: HashMap<u64, u64> = HashMap::new();
 
     for line in buf.lines().filter_map(|line_result| line_result.ok()) {
         for line_part in line.split(" ") {
-            stone_line.push(Stone::new(line_part.trim().parse()?));
+            *stone_map.entry(line_part.trim().parse()?).or_insert(0) += 1;
         }
     }
 
-    let mut number_of_stones = 0;
-    let start_time = SystemTime::now();
-
-    let mut join_set = JoinSet::new();
-
-    for stone in stone_line {
-        join_set.spawn(calc_resulting_stones(stone, number_of_blinks));
+    for i in 1..=number_of_blinks {
+        let start_time = SystemTime::now();
+        let mut new_stone_map = HashMap::new();
+        for (stone_number, count) in stone_map {
+            if stone_number == 0 {
+                *new_stone_map.entry(stone_number + 1).or_insert(0) += count;
+            } else {
+                let number_of_digits = stone_number.checked_ilog10().unwrap_or(0) + 1;
+                if number_of_digits % 2 == 0 {
+                    let divisor = u64::pow(10, number_of_digits / 2);
+                    let first_half = stone_number / divisor;
+                    let second_half = stone_number % divisor;
+                    *new_stone_map.entry(first_half).or_insert(0) += count;
+                    *new_stone_map.entry(second_half).or_insert(0) += count;
+                } else {
+                    *new_stone_map.entry(stone_number * 2024).or_insert(0) += count;
+                }
+            }
+        }
+        stone_map = new_stone_map;
+        println!(
+            "Iteration: {} Stone Count: {} Duration: {}s",
+            i,
+            stone_map.values().sum::<u64>(),
+            start_time.elapsed().unwrap().as_secs()
+        );
     }
 
-    while let Some(Ok(result)) = join_set.join_next().await {
-        number_of_stones += result;
-    }
-
-    println!("Duration: {}s", start_time.elapsed().unwrap().as_secs());
-    Ok(number_of_stones)
+    Ok(stone_map.values().sum())
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     println!("Solution 1: {}", puzzle01("data/data_1", 25).unwrap());
-    println!("Solution 2: {}", puzzle02("data/data_1", 75).await.unwrap());
+    println!("Solution 2: {}", puzzle02("data/data_1", 75).unwrap());
 }
 
 #[cfg(test)]
@@ -176,11 +143,8 @@ mod tests {
         assert_eq!(crate::puzzle01("data/test_data_1", 25).unwrap(), 55312)
     }
 
-    #[tokio::test]
-    async fn test2() {
-        assert_eq!(
-            crate::puzzle02("data/test_data_1", 25).await.unwrap(),
-            55312
-        )
+    #[test]
+    fn test2() {
+        assert_eq!(crate::puzzle02("data/test_data_1", 25).unwrap(), 55312)
     }
 }
